@@ -8,4 +8,8 @@ steps.
 
 | Folder | Hooks | What it does |
 |---|---|---|
-| [`dumb-zone-40`](dumb-zone-40/README.md) | `check_context.py` (`UserPromptSubmit`), `agent_degradation_check.py` (`Stop`) | Watches a session for a filling context window and, once it's large, for heuristic signs of agent behavioral degradation (context drift, hallucinated artifacts, tool misuse, …). Both are observational only — they print `OK`/`WARNING` and never block. |
+| [`context-window-check`](context-window-check/README.md) | `check_context.py` (`UserPromptSubmit`) | Watches a session's context window fill level and prints a warning as it approaches the limit. Observational only — prints a note and never blocks. |
+| [`dumb-zone-40`](dumb-zone-40/README.md) | `agent_degradation_check.py` (`Stop`) | Once context is large, checks for heuristic signs of agent behavioral degradation (context drift, hallucinated artifacts, tool misuse, …). Observational only — prints `OK`/`WARNING` and never blocks. |
+
+Each hook is installed and runs independently — they don't call or depend
+on each other, and either can be used without the other.
