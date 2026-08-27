@@ -20,7 +20,7 @@ Runs once per finished assistant turn (`Stop`).
 1. Reads `transcript_path`, computes `context_size` from the **latest**
    assistant entry's `usage` field: `input_tokens + cache_read_input_tokens
    + cache_creation_input_tokens`. The same entry's `model` field is looked
-   up in `CONTEXT_WINDOW_BY_MODEL` (1M for current Opus/Sonnet-tier models,
+   up in `CONTEXT_WINDOW_BY_MODEL` (1M for current Fable/Opus/Sonnet-tier models,
    200k for Haiku 4.5, 200k fallback for unrecognized models) to get that
    model's context window.
 2. If `context_size <= WARN_FRACTION * context_window` (40% of the detected
