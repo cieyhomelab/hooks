@@ -58,7 +58,7 @@ CONTEXT_WINDOW_BY_MODEL = {
 # model that shipped after this table was last updated.
 DEFAULT_CONTEXT_WINDOW = 200_000
 
-WARN_FRACTION = 0.75       # mirrors check_context.py's WARN_AT
+WARN_FRACTION = 0.40     # mirrors check_context.py's WARN_AT
 VIOLATION_THRESHOLD = 2    # warn when MORE than this many rules are violated
 RECENT_ENTRIES = 20        # trailing transcript entries used to build CONTEXT_CONTENT
 DOC_PATH = Path(__file__).resolve().parent / "Agent_Degradation_Signals_Technical_Documentation.md"

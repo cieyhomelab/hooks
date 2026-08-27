@@ -38,7 +38,7 @@ CONTEXT_WINDOW_BY_MODEL = {
 # model that shipped after this table was last updated.
 DEFAULT_CONTEXT_WINDOW = 200_000
 
-WARN_AT = 0.75   # warning
+WARN_AT = 0.40 # warning dumb zone
 CRIT_AT = 0.90   # critical, suggest /compact
 
 
@@ -103,7 +103,7 @@ def main():
         )
     elif pct >= WARN_AT:
         note = (
-            f"[context-check] Warning: context is {pct:.0%} full "
+            f"[context-check] Warning: context is {pct:.0%} full. You're entering the dumb zone. "
             f"({used:,}/{context_window:,} tokens)."
         )
     else:
