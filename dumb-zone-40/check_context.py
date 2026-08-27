@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-Hook Claude Code: sprawdza zapełnienie okna kontekstu na podstawie transcript_path.
-Podłącz do UserPromptSubmit (patrz settings.json poniżej).
+Claude Code hook: checks context window fill level based on transcript_path.
+Attach to UserPromptSubmit (see settings.json below).
 
-Zasada działania:
-- Claude Code zapisuje sesję jako plik .jsonl (transcript_path).
-- Każdy wpis asystenta zawiera pole "usage" z faktycznymi liczbami tokenów
-  zwróconymi przez API (input_tokens, cache_read_input_tokens,
+How it works:
+- Claude Code stores the session as a .jsonl file (transcript_path).
+- Every assistant entry contains a "usage" field with the actual token
+  counts returned by the API (input_tokens, cache_read_input_tokens,
   cache_creation_input_tokens).
-- Suma tych trzech wartości z NAJNOWSZEGO wpisu asystenta ~= ile tokenów
-  aktualnie zajmuje historia rozmowy w kontekście.
+- The sum of these three values from the LATEST assistant entry ~= how many
+  tokens the conversation history currently occupies in context.
 """
 import json
 import sys
 
-# Dopasuj do modelu, którego używasz (Sonnet/Opus/Haiku standardowo 200k,
-# warianty [1m] mają 1 000 000).
+# Match this to the model you're using (Sonnet/Opus/Haiku standard is 200k,
+# [1m] variants have 1,000,000).
 CONTEXT_WINDOW = 200_000
-WARN_AT = 0.75   # ostrzeżenie
-CRIT_AT = 0.90   # krytyczne, sugestia /compact
+WARN_AT = 0.75   # warning
+CRIT_AT = 0.90   # critical, suggest /compact
 
 
 def get_latest_usage(transcript_path: str):
@@ -46,7 +46,7 @@ def main():
     try:
         data = json.load(sys.stdin)
     except json.JSONDecodeError:
-        sys.exit(0)  # nie blokujemy sesji przez błąd parsowania
+        sys.exit(0)  # don't block the session on a parse error
 
     transcript_path = data.get("transcript_path", "")
     if not transcript_path:
@@ -65,19 +65,19 @@ def main():
 
     if pct >= CRIT_AT:
         note = (
-            f"[context-check] KRYTYCZNE: kontekst zapełniony w {pct:.0%} "
-            f"({used:,}/{CONTEXT_WINDOW:,} tokenów). Rozważ /compact."
+            f"[context-check] CRITICAL: context is {pct:.0%} full "
+            f"({used:,}/{CONTEXT_WINDOW:,} tokens). Consider /compact."
         )
     elif pct >= WARN_AT:
         note = (
-            f"[context-check] Uwaga: kontekst zapełniony w {pct:.0%} "
-            f"({used:,}/{CONTEXT_WINDOW:,} tokenów)."
+            f"[context-check] Warning: context is {pct:.0%} full "
+            f"({used:,}/{CONTEXT_WINDOW:,} tokens)."
         )
     else:
-        # poniżej progu — nic nie wypisujemy, żeby nie zaśmiecać kontekstu
+        # below threshold — print nothing, to avoid cluttering the context
         sys.exit(0)
 
-    # Dla UserPromptSubmit: stdout przy exit 0 trafia do kontekstu Claude.
+    # For UserPromptSubmit: stdout on exit 0 is injected into Claude's context.
     print(note)
     sys.exit(0)
 
