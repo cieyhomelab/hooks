@@ -16,8 +16,12 @@ Runs before each user prompt is processed.
 2. Scans the session's `.jsonl` transcript for the **latest** assistant
    entry's `usage` field and sums `input_tokens + cache_read_input_tokens +
    cache_creation_input_tokens`. That sum approximates how many tokens the
-   conversation currently occupies in context.
-3. Compares that against `CONTEXT_WINDOW` (200k by default):
+   conversation currently occupies in context. The same entry's `model`
+   field is used to look up that model's context window in
+   `CONTEXT_WINDOW_BY_MODEL` (1M for current Opus/Sonnet-tier models, 200k
+   for Haiku 4.5) — models not in the table fall back to
+   `DEFAULT_CONTEXT_WINDOW` (200k).
+3. Compares `used` against the detected context window:
    - `>= 90%` → prints a `CRITICAL` line suggesting `/compact`.
    - `>= 75%` → prints a `Warning` line.
    - below 75% → prints nothing (exits silently to avoid cluttering context).
@@ -31,9 +35,10 @@ sees.
 ```mermaid
 flowchart TD
     UPS[UserPromptSubmit event] --> CC[check_context.py]
-    CC --> T1[Read transcript_path,\nfind latest assistant usage]
-    T1 --> CS1["context_size = input + cache_read + cache_creation tokens"]
-    CS1 --> PCT["pct = context_size / CONTEXT_WINDOW (200k)"]
+    CC --> T1[Read transcript_path,\nfind latest assistant usage + model]
+    T1 --> CW["context_window = CONTEXT_WINDOW_BY_MODEL[model]\n(fallback: 200k)"]
+    CW --> CS1["context_size = input + cache_read + cache_creation tokens"]
+    CS1 --> PCT["pct = context_size / context_window"]
     PCT -->|pct >= 90%| CRIT["print CRITICAL — suggest /compact"]
     PCT -->|75% <= pct < 90%| WARN1["print Warning"]
     PCT -->|pct < 75%| SILENT[exit silently]
