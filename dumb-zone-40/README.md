@@ -20,10 +20,10 @@ Runs once per finished assistant turn (`Stop`).
 1. Reads `transcript_path`, computes `context_size` from the **latest**
    assistant entry's `usage` field: `input_tokens + cache_read_input_tokens
    + cache_creation_input_tokens`. The same entry's `model` field is looked
-   up in `CONTEXT_WINDOW_BY_MODEL` (1M for current Opus/Sonnet-tier models,
+   up in `CONTEXT_WINDOW_BY_MODEL` (1M for current Fable/Opus/Sonnet-tier models,
    200k for Haiku 4.5, 200k fallback for unrecognized models) to get that
    model's context window.
-2. If `context_size <= WARN_FRACTION * context_window` (75% of the detected
+2. If `context_size <= WARN_FRACTION * context_window` (40% of the detected
    window) → prints `OK` and exits.
 3. Otherwise it loads `Agent_Degradation_Signals_Technical_Documentation.md`
    and parses every `## N.M Name` / `### N.M Name` heading into a `RULES`
@@ -55,8 +55,8 @@ flowchart TD
     ADC --> T2["Read transcript_path:\nlatest usage + model + last 20 entries"]
     T2 --> CW2["context_window = CONTEXT_WINDOW_BY_MODEL[model]\n(fallback: 200k)"]
     CW2 --> CS2["context_size = input + cache_read + cache_creation tokens"]
-    CS2 -->|context_size <= 0.75 * context_window| OK1["print OK"]
-    CS2 -->|context_size > 0.75 * context_window| DOC[Parse degradation-signals doc]
+    CS2 -->|context_size <= 0.40 * context_window| OK1["print OK"]
+    CS2 -->|context_size > 0.40 * context_window| DOC[Parse degradation-signals doc]
     DOC --> RULES["RULES = 15 signal names\nfrom ## N.M headings"]
     RULES --> EVAL["Match CONTEXT_CONTENT against\nSIGNAL_HEURISTICS regex per rule"]
     EVAL --> COUNT[violations = matched rule names]

@@ -23,8 +23,8 @@ Runs before each user prompt is processed.
    `DEFAULT_CONTEXT_WINDOW` (200k).
 3. Compares `used` against the detected context window:
    - `>= 90%` → prints a `CRITICAL` line suggesting `/compact`.
-   - `>= 75%` → prints a `Warning` line.
-   - below 75% → prints nothing (exits silently to avoid cluttering context).
+   - `>= 40%` → prints a `Warning` line.
+   - below 40% → prints nothing (exits silently to avoid cluttering context).
 
 Because it's a `UserPromptSubmit` hook, its stdout on exit 0 is injected
 back into Claude's context — so the warning is something the model itself
@@ -40,8 +40,8 @@ flowchart TD
     CW --> CS1["context_size = input + cache_read + cache_creation tokens"]
     CS1 --> PCT["pct = context_size / context_window"]
     PCT -->|pct >= 90%| CRIT["print CRITICAL — suggest /compact"]
-    PCT -->|75% <= pct < 90%| WARN1["print Warning"]
-    PCT -->|pct < 75%| SILENT[exit silently]
+    PCT -->|40% <= pct < 90%| WARN1["print Warning"]
+    PCT -->|pct < 40%| SILENT[exit silently]
 ```
 
 ## Installing the hook
@@ -177,7 +177,7 @@ does **not** retroactively apply. Close the session and start a new one
   directory for an existing session. The script exits 0 either way; look
   at stdout for a `[context-check] ...` line.
 - Then trigger it for real: send a prompt. Since it only prints output
-  once you're past 75% of the context window, you may need a long session
+  once you're past 40% of the context window, you may need a long session
   before you see anything — that's expected, not a sign it's broken.
 
 ### Troubleshooting
@@ -186,7 +186,7 @@ does **not** retroactively apply. Close the session and start a new one
   edited the wrong file (project vs. global — check which one Claude Code
   is actually loading), or you didn't start a new session after saving.
 - **`/hooks` lists it but it never prints** → the hook is designed to stay
-  silent below 75% context usage; that's by design, not a bug. Use the
+  silent below 40% context usage; that's by design, not a bug. Use the
   stdin sanity-check above with a real (large) transcript to confirm the
   script itself detects the condition.
 - **`'python' is not recognized...`** → Claude Code's hook subprocess
