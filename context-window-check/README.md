@@ -26,9 +26,9 @@ Runs before each user prompt is processed.
    - `>= 40%` → prints a `Warning` line.
    - below 40% → prints nothing (exits silently to avoid cluttering context).
 
-Because it's a `UserPromptSubmit` hook, its stdout on exit 0 is injected
-back into Claude's context — so the warning is something the model itself
-sees.
+The warning is delivered via the hook JSON `systemMessage` field, which
+Claude Code shows directly to the user in the CLI — it is **not** injected
+into Claude's context, so the model itself never sees it.
 
 ## Flow
 
@@ -39,8 +39,8 @@ flowchart TD
     T1 --> CW["context_window = CONTEXT_WINDOW_BY_MODEL[model]\n(fallback: 200k)"]
     CW --> CS1["context_size = input + cache_read + cache_creation tokens"]
     CS1 --> PCT["pct = context_size / context_window"]
-    PCT -->|pct >= 90%| CRIT["print CRITICAL — suggest /compact"]
-    PCT -->|40% <= pct < 90%| WARN1["print Warning"]
+    PCT -->|pct >= 90%| CRIT["systemMessage: CRITICAL — suggest /compact"]
+    PCT -->|40% <= pct < 90%| WARN1["systemMessage: Warning"]
     PCT -->|pct < 40%| SILENT[exit silently]
 ```
 
@@ -174,8 +174,9 @@ does **not** retroactively apply. Close the session and start a new one
   (swap `.claude/hooks/` for your global hooks folder if you went with
   Option B)
   A real `transcript_path` can be found under Claude Code's project data
-  directory for an existing session. The script exits 0 either way; look
-  at stdout for a `[context-check] ...` line.
+  directory for an existing session. The script exits 0 either way; below
+  the threshold it prints nothing, above it prints a JSON line like
+  `{"systemMessage": "[context-check] ...", "suppressOutput": true}`.
 - Then trigger it for real: send a prompt. Since it only prints output
   once you're past 40% of the context window, you may need a long session
   before you see anything — that's expected, not a sign it's broken.

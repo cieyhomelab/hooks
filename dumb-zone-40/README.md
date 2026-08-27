@@ -2,8 +2,8 @@
 
 A single, non-blocking Claude Code hook that watches a session for
 heuristic signs of agent behavioral degradation once its context is
-large, and prints a short `OK` / `WARNING` line. It doesn't modify the
-agent's behavior — it's observational only.
+large, and shows the user a `WARNING` message when it finds one. It
+doesn't modify the agent's behavior — it's observational only.
 
 | File | Hook event | Watches for |
 |---|---|---|
@@ -24,7 +24,7 @@ Runs once per finished assistant turn (`Stop`).
    200k for Haiku 4.5, 200k fallback for unrecognized models) to get that
    model's context window.
 2. If `context_size <= WARN_FRACTION * context_window` (40% of the detected
-   window) → prints `OK` and exits.
+   window) → exits silently.
 3. Otherwise it loads `Agent_Degradation_Signals_Technical_Documentation.md`
    and parses every `## N.M Name` / `### N.M Name` heading into a `RULES`
    list — this is how the 15 signals (Context Drift, Hallucinated
@@ -38,8 +38,10 @@ Runs once per finished assistant turn (`Stop`).
    Any rule from the doc that isn't in the curated table falls back to a
    generic word-match on its own name, so new signals added to the doc
    still produce something.
-6. If **more than 2** rules matched → prints `WARNING` with the list of
-   violated rule names. Otherwise prints `OK`.
+6. If **more than 2** rules matched → shows the user a `WARNING` message
+   with the list of violated rule names, via the hook JSON `systemMessage`
+   field (not injected into Claude's context). Otherwise exits silently —
+   no message pops up after every single turn.
 
 **Important limitation:** this is pattern-matching, not semantic
 understanding. It can't actually verify whether a file exists or whether a
@@ -55,13 +57,13 @@ flowchart TD
     ADC --> T2["Read transcript_path:\nlatest usage + model + last 20 entries"]
     T2 --> CW2["context_window = CONTEXT_WINDOW_BY_MODEL[model]\n(fallback: 200k)"]
     CW2 --> CS2["context_size = input + cache_read + cache_creation tokens"]
-    CS2 -->|context_size <= 0.40 * context_window| OK1["print OK"]
+    CS2 -->|context_size <= 0.40 * context_window| OK1[exit silently]
     CS2 -->|context_size > 0.40 * context_window| DOC[Parse degradation-signals doc]
     DOC --> RULES["RULES = 15 signal names\nfrom ## N.M headings"]
     RULES --> EVAL["Match CONTEXT_CONTENT against\nSIGNAL_HEURISTICS regex per rule"]
     EVAL --> COUNT[violations = matched rule names]
-    COUNT -->|"count > 2"| WARN2["print WARNING + violation list"]
-    COUNT -->|"count <= 2"| OK2["print OK"]
+    COUNT -->|"count > 2"| WARN2["systemMessage: WARNING + violation list"]
+    COUNT -->|"count <= 2"| OK2[exit silently]
 ```
 
 ## Installing the hook
@@ -204,10 +206,12 @@ does **not** retroactively apply. Close the session and start a new one
   (swap `.claude/hooks/` for your global hooks folder if you went with
   Option B)
   A real `transcript_path` can be found under Claude Code's project data
-  directory for an existing session. The script exits 0 either way; look
-  at stdout for an `agent-degradation-check: ...` line.
-- Then let a turn finish to trigger it for real. Since it only prints a
-  `WARNING` once you're past its threshold (75% of your model's context
+  directory for an existing session. The script exits 0 either way; below
+  threshold or without violations it prints nothing, above threshold with
+  violations it prints a JSON line like
+  `{"systemMessage": "agent-degradation-check: WARNING — ...", "suppressOutput": true}`.
+- Then let a turn finish to trigger it for real. Since it only shows a
+  `WARNING` once you're past its threshold (40% of your model's context
   window AND >2 heuristic matches), you may need a long session before you see
   anything — that's expected, not a sign it's broken.
 
@@ -224,12 +228,12 @@ does **not** retroactively apply. Close the session and start a new one
   doesn't see the same `PATH` as your interactive shell. Use the full
   interpreter path instead, e.g.
   `"C:/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe .claude/hooks/agent_degradation_check.py"`.
-- **Always prints `OK`, never `WARNING`, even on a huge transcript** →
-  you likely copied only the `.py` file. Check that
+- **Never shows `WARNING`, even on a huge transcript** → you likely copied
+  only the `.py` file. Check that
   `Agent_Degradation_Signals_Technical_Documentation.md` sits in the same
   `hooks/` folder next to it — without it, `load_rules()` returns no
   rules and the hook has nothing to evaluate.
-- **Stop hook output never shows up as something Claude "sees"** → this
-  is expected: on `Stop`, stdout at exit 0 is *not* injected into
-  Claude's context (unlike `UserPromptSubmit`). Check
-  transcript/verbose output, not the conversation itself.
+- **Expecting the message in the conversation itself** → this is expected
+  not to happen: `systemMessage` is shown to the user in the CLI (a
+  system-style note, not a chat message) and is deliberately never fed
+  back into Claude's context, so the model itself never sees it.
