@@ -110,8 +110,9 @@ def main():
         # below threshold — print nothing, to avoid cluttering the context
         sys.exit(0)
 
-    # For UserPromptSubmit: stdout on exit 0 is injected into Claude's context.
-    print(note)
+    # systemMessage is shown directly to the user in the CLI and is NOT
+    # injected into Claude's context (unlike plain stdout on UserPromptSubmit).
+    print(json.dumps({"systemMessage": note, "suppressOutput": True}))
     sys.exit(0)
 
 

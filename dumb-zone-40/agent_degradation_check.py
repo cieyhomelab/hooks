@@ -24,13 +24,16 @@ Design decisions (per Socratic session with the user):
   parsed from the doc that isn't in the curated table falls back to a
   generic word-match on its own name, so newly added doc signals still
   produce *something* rather than being silently skipped.
-- Non-blocking: this hook only prints an OK/WARNING line and always exits 0.
-  It does not set "decision": "block", so it never forces the agent to
-  keep going — it's an observational signal, not an enforcement gate.
+- Non-blocking: this hook always exits 0 and never sets "decision": "block",
+  so it never forces the agent to keep going — it's an observational signal,
+  not an enforcement gate.
+- Output goes through the hook JSON "systemMessage" field, which Claude Code
+  shows directly to the user in the CLI and does NOT inject into Claude's
+  context (unlike plain stdout on other hook events). Silent on OK — a
+  message would otherwise pop up after every single turn.
 
-Output:
-  agent-degradation-check: OK
-  agent-degradation-check: WARNING — N violations detected: [...]
+Output (only on WARNING; silent otherwise):
+  {"systemMessage": "agent-degradation-check: WARNING — N violations detected: [...]", "suppressOutput": true}
 """
 import json
 import re
@@ -234,21 +237,21 @@ def main():
     warn_threshold = WARN_FRACTION * get_context_window(model)
 
     if context_size <= warn_threshold:
-        print("agent-degradation-check: OK")
         sys.exit(0)
 
     rules = load_rules(DOC_PATH)
     if not rules:
-        print("agent-degradation-check: OK")
         sys.exit(0)
 
     content = "\n".join(extract_text(e) for e in tail_entries)
     violations = evaluate_rules(content, rules)
 
     if len(violations) > VIOLATION_THRESHOLD:
-        print(f"agent-degradation-check: WARNING — {len(violations)} violations detected: {violations}")
-    else:
-        print("agent-degradation-check: OK")
+        note = f"agent-degradation-check: WARNING — {len(violations)} violations detected: {violations}"
+        # systemMessage is shown directly to the user in the CLI and is NOT
+        # injected into Claude's context. Silent (no output) on OK, to avoid
+        # popping a message after every single turn.
+        print(json.dumps({"systemMessage": note, "suppressOutput": True}))
     sys.exit(0)
 
 
