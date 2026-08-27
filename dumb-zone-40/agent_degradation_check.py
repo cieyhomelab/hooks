@@ -247,7 +247,7 @@ def main():
     violations = evaluate_rules(content, rules)
 
     if len(violations) > VIOLATION_THRESHOLD:
-        note = f"agent-degradation-check: WARNING — {len(violations)} violations detected: {violations}"
+        note = f"🟡 agent-degradation-check: WARNING — {len(violations)} violations detected: {violations}"
         # systemMessage is shown directly to the user in the CLI and is NOT
         # injected into Claude's context. Silent (no output) on OK, to avoid
         # popping a message after every single turn.

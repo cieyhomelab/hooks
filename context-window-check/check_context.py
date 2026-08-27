@@ -98,12 +98,12 @@ def main():
 
     if pct >= CRIT_AT:
         note = (
-            f"[context-check] CRITICAL: context is {pct:.0%} full "
+            f"🔴 [context-check] CRITICAL: context is {pct:.0%} full "
             f"({used:,}/{context_window:,} tokens). Consider /compact."
         )
     elif pct >= WARN_AT:
         note = (
-            f"[context-check] Warning: context is {pct:.0%} full. You're entering the dumb zone. "
+            f"🟡 [context-check] Warning: context is {pct:.0%} full. You're entering the dumb zone. "
             f"({used:,}/{context_window:,} tokens)."
         )
     else:
