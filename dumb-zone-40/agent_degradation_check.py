@@ -10,8 +10,11 @@ Design decisions (per Socratic session with the user):
     CONTEXT_SIZE    = latest assistant usage's
                        input_tokens + cache_read_input_tokens + cache_creation_input_tokens
     CONTEXT_CONTENT = extracted text of the last RECENT_ENTRIES transcript entries
-  WARN_THRESHOLD is a raw token count (default mirrors check_context.py's
-  WARN_AT = 0.75 * 200_000 context window).
+  The warn threshold is WARN_FRACTION (0.75, mirrors check_context.py's
+  WARN_AT) of the context window for the model that produced the latest
+  usage entry, looked up from the same CONTEXT_WINDOW_BY_MODEL table
+  check_context.py uses - not a fixed token count, since context windows
+  vary by model (1M for current Opus/Sonnet-tier models, 200k for Haiku).
 - RULES are parsed dynamically from DOC_PATH (headings "## N.M Name" /
   "### N.M Name"), so if the doc gains/loses signals, RULES follows.
 - Detection is hand-crafted heuristics per signal: a curated table of
@@ -35,10 +38,39 @@ import sys
 from collections import deque
 from pathlib import Path
 
-WARN_THRESHOLD = 150_000   # raw tokens; mirrors check_context.py's 0.75 * 200k default
+# Context window (tokens) per model, keyed by model-ID prefix. Longest
+# matching prefix wins. Kept in sync with context-window-check/check_context.py
+# - update both when new models ship. See shared/models.md in the claude-api
+# skill, or query the live Models API (client.models.retrieve(model_id)
+# .max_input_tokens) for current data.
+CONTEXT_WINDOW_BY_MODEL = {
+    "claude-fable-5": 1_000_000,
+    "claude-mythos-5": 1_000_000,
+    "claude-opus-5": 1_000_000,
+    "claude-opus-4-8": 1_000_000,
+    "claude-opus-4-7": 1_000_000,
+    "claude-opus-4-6": 1_000_000,
+    "claude-sonnet-5": 1_000_000,
+    "claude-sonnet-4-6": 1_000_000,
+    "claude-haiku-4-5": 200_000,
+}
+# Fallback for models not in the table above - older/legacy models, or a
+# model that shipped after this table was last updated.
+DEFAULT_CONTEXT_WINDOW = 200_000
+
+WARN_FRACTION = 0.75       # mirrors check_context.py's WARN_AT
 VIOLATION_THRESHOLD = 2    # warn when MORE than this many rules are violated
 RECENT_ENTRIES = 20        # trailing transcript entries used to build CONTEXT_CONTENT
 DOC_PATH = Path(__file__).resolve().parent / "Agent_Degradation_Signals_Technical_Documentation.md"
+
+
+def get_context_window(model: str) -> int:
+    if not model:
+        return DEFAULT_CONTEXT_WINDOW
+    for prefix in sorted(CONTEXT_WINDOW_BY_MODEL, key=len, reverse=True):
+        if model.startswith(prefix):
+            return CONTEXT_WINDOW_BY_MODEL[prefix]
+    return DEFAULT_CONTEXT_WINDOW
 
 RULE_HEADING_RE = re.compile(r'^#{2,3}\s+\d+\.\d+\s+(.+?)\s*$', re.MULTILINE)
 
@@ -124,6 +156,7 @@ def fallback_patterns(rule_name: str):
 def get_transcript_tail(transcript_path: str, max_entries: int):
     entries = deque(maxlen=max_entries)
     latest_usage = None
+    latest_model = None
     try:
         with open(transcript_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -135,12 +168,14 @@ def get_transcript_tail(transcript_path: str, max_entries: int):
                 except json.JSONDecodeError:
                     continue
                 entries.append(entry)
-                usage = entry.get("message", {}).get("usage")
+                msg = entry.get("message", {})
+                usage = msg.get("usage")
                 if usage:
                     latest_usage = usage
+                    latest_model = msg.get("model")
     except FileNotFoundError:
-        return None, None
-    return list(entries), latest_usage
+        return None, None, None
+    return list(entries), latest_usage, latest_model
 
 
 def extract_text(entry: dict) -> str:
@@ -187,7 +222,7 @@ def main():
     if not transcript_path:
         sys.exit(0)
 
-    tail_entries, usage = get_transcript_tail(transcript_path, RECENT_ENTRIES)
+    tail_entries, usage, model = get_transcript_tail(transcript_path, RECENT_ENTRIES)
     if tail_entries is None or not usage:
         sys.exit(0)
 
@@ -196,8 +231,9 @@ def main():
         + usage.get("cache_read_input_tokens", 0)
         + usage.get("cache_creation_input_tokens", 0)
     )
+    warn_threshold = WARN_FRACTION * get_context_window(model)
 
-    if context_size <= WARN_THRESHOLD:
+    if context_size <= warn_threshold:
         print("agent-degradation-check: OK")
         sys.exit(0)
 

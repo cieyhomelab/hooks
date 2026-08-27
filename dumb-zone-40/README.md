@@ -19,9 +19,12 @@ Runs once per finished assistant turn (`Stop`).
 
 1. Reads `transcript_path`, computes `context_size` from the **latest**
    assistant entry's `usage` field: `input_tokens + cache_read_input_tokens
-   + cache_creation_input_tokens`.
-2. If `context_size <= WARN_THRESHOLD` (150k tokens by default) → prints
-   `OK` and exits.
+   + cache_creation_input_tokens`. The same entry's `model` field is looked
+   up in `CONTEXT_WINDOW_BY_MODEL` (1M for current Opus/Sonnet-tier models,
+   200k for Haiku 4.5, 200k fallback for unrecognized models) to get that
+   model's context window.
+2. If `context_size <= WARN_FRACTION * context_window` (75% of the detected
+   window) → prints `OK` and exits.
 3. Otherwise it loads `Agent_Degradation_Signals_Technical_Documentation.md`
    and parses every `## N.M Name` / `### N.M Name` heading into a `RULES`
    list — this is how the 15 signals (Context Drift, Hallucinated
@@ -49,10 +52,11 @@ judge.
 flowchart TD
     STOP[Stop event] --> ADC[agent_degradation_check.py]
 
-    ADC --> T2["Read transcript_path:\nlatest usage + last 20 entries"]
-    T2 --> CS2["context_size = input + cache_read + cache_creation tokens"]
-    CS2 -->|context_size <= 150k| OK1["print OK"]
-    CS2 -->|context_size > 150k| DOC[Parse degradation-signals doc]
+    ADC --> T2["Read transcript_path:\nlatest usage + model + last 20 entries"]
+    T2 --> CW2["context_window = CONTEXT_WINDOW_BY_MODEL[model]\n(fallback: 200k)"]
+    CW2 --> CS2["context_size = input + cache_read + cache_creation tokens"]
+    CS2 -->|context_size <= 0.75 * context_window| OK1["print OK"]
+    CS2 -->|context_size > 0.75 * context_window| DOC[Parse degradation-signals doc]
     DOC --> RULES["RULES = 15 signal names\nfrom ## N.M headings"]
     RULES --> EVAL["Match CONTEXT_CONTENT against\nSIGNAL_HEURISTICS regex per rule"]
     EVAL --> COUNT[violations = matched rule names]
@@ -203,8 +207,8 @@ does **not** retroactively apply. Close the session and start a new one
   directory for an existing session. The script exits 0 either way; look
   at stdout for an `agent-degradation-check: ...` line.
 - Then let a turn finish to trigger it for real. Since it only prints a
-  `WARNING` once you're past its threshold (150k tokens context AND >2
-  heuristic matches), you may need a long session before you see
+  `WARNING` once you're past its threshold (75% of your model's context
+  window AND >2 heuristic matches), you may need a long session before you see
   anything — that's expected, not a sign it's broken.
 
 ### Troubleshooting
